@@ -1,113 +1,124 @@
-# Работа с массивами данных
-import numpy as np
-
-# Работа с таблицами
-import pandas as pd
-
-# Отрисовка графиков
-import matplotlib.pyplot as plt
-
-# Функции-утилиты для работы с категориальными данными
-from tensorflow.keras import utils
-
-# Класс для конструирования последовательной модели нейронной сети
-from tensorflow.keras.models import Sequential
-
-# Основные слои
-from tensorflow.keras.layers import Dense, Dropout, SpatialDropout1D, BatchNormalization, Embedding, Flatten, Activation
-
-# Токенизатор для преобразование текстов в последовательности
-from tensorflow.keras.preprocessing.text import Tokenizer
-
-# Заполнение последовательностей до определенной длины
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-
-# Загрузка датасетов из облака google
+import os
+import zipfile
+import random
+import shutil
 import gdown
-
-# Для работы с файлами в Colaboratory
-import os
-
-# Отрисовка графиков
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, classification_report
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Embedding, SpatialDropout1D, GlobalAveragePooling1D, Dense
 import matplotlib.pyplot as plt
 
-%matplotlib inline
-gdown.download('https://storage.yandexcloud.net/aiueducation/Content/base/l7/tesla.zip', None, quiet=True)
+DATA_URL = 'https://storage.yandexcloud.net/aiueducation/Content/base/l7/tesla.zip'
+DATA_DIR = 'tesla'
+ZIP_PATH = 'tesla.zip'
 
-# Распаковка архива в папку writers
-!unzip -qo tesla.zip -d tesla/
 
-# Просмотр содержимого папки
-!ls tesla
+def download_and_extract():
+    """Ensure dataset is available locally."""
+    if os.path.isdir(DATA_DIR) and \
+       os.path.isfile(os.path.join(DATA_DIR, 'Негативный отзыв.txt')) and \
+       os.path.isfile(os.path.join(DATA_DIR, 'Позитивный отзыв.txt')):
+        return
+    if os.path.isfile('Негативный отзыв.txt') and os.path.isfile('Позитивный отзыв.txt'):
+        os.makedirs(DATA_DIR, exist_ok=True)
+        shutil.copy('Негативный отзыв.txt', os.path.join(DATA_DIR, 'Негативный отзыв.txt'))
+        shutil.copy('Позитивный отзыв.txt', os.path.join(DATA_DIR, 'Позитивный отзыв.txt'))
+        return
+    try:
+        print('Downloading dataset...')
+        gdown.download(DATA_URL, ZIP_PATH, quiet=False)
+        with zipfile.ZipFile(ZIP_PATH, 'r') as zf:
+            zf.extractall(DATA_DIR)
+        print('Dataset extracted to', DATA_DIR)
+    except Exception as e:
+        print('Failed to download dataset:', e)
+        if not os.path.isdir(DATA_DIR):
+            raise
 
-  # Объявляем функции для чтения файла. На вход отправляем путь к файлу
-def read_text(file_name):
 
-  # Задаем открытие нужного файла в режиме чтения
-  read_file = open(file_name, 'r')
+def read_reviews(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        lines = [line.strip() for line in f if line.strip()]
+    return list(dict.fromkeys(lines))
 
-  # Читаем текст
-  text = read_file.read()
 
-  # Переносы строки переводим в пробелы
-  text = text.replace("\n", " ")
+def prepare_datasets():
+    download_and_extract()
+    neg_path = os.path.join(DATA_DIR, 'Негативный отзыв.txt')
+    pos_path = os.path.join(DATA_DIR, 'Позитивный отзыв.txt')
 
-  # Возвращаем текст файла
-  return text
+    neg_reviews = read_reviews(neg_path)
+    pos_reviews = read_reviews(pos_path)
 
-# Объявляем интересующие нас классы
-class_names = ["Негативный отзыв", "Позитивный отзыв"]
+    min_len = min(len(neg_reviews), len(pos_reviews))
+    random.seed(42)
+    random.shuffle(neg_reviews)
+    random.shuffle(pos_reviews)
+    neg_reviews = neg_reviews[:min_len]
+    pos_reviews = pos_reviews[:min_len]
 
-# Считаем количество классов
-num_classes = len(class_names)
+    texts = neg_reviews + pos_reviews
+    labels = [0] * len(neg_reviews) + [1] * len(pos_reviews)
+    return train_test_split(texts, labels, test_size=0.2, random_state=42, stratify=labels)
 
-import os
-# Создаём список под тексты для обучающей выборки
-texts_list = []
 
-# Циклом проводим итерацию по текстовым файлам в папке отзывов
-for j in os.listdir('/content/tesla/'):
+def vectorize_text(train_texts, val_texts, vocab_size=10000, max_len=50):
+    tokenizer = Tokenizer(num_words=vocab_size, oov_token='<OOV>')
+    tokenizer.fit_on_texts(train_texts)
+    X_train = pad_sequences(tokenizer.texts_to_sequences(train_texts), maxlen=max_len, padding='post')
+    X_val = pad_sequences(tokenizer.texts_to_sequences(val_texts), maxlen=max_len, padding='post')
+    return X_train, X_val, tokenizer
 
-  # Добавляем каждый файл в общий список для выборки
-        texts_list.append(read_text('/content/tesla/' + j))
 
-        # Выводим на экран сообщение о добавлении файла
-        print(j, 'добавлен в обучающую выборку')
+def build_model(vocab_size=10000, max_len=50):
+    model = Sequential([
+        Embedding(vocab_size, 128, input_length=max_len),
+        SpatialDropout1D(0.2),
+        GlobalAveragePooling1D(),
+        Dense(64, activation='relu'),
+        Dense(2, activation='softmax')
+    ])
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    return model
 
-# Узнаем объём каждого текста в символах
-texts_len = [len(text) for text in texts_list]
 
-# Устанавливаем "счётчик" номера текста
-t_num = 0
+def main():
+    X_train_texts, X_val_texts, y_train, y_val = prepare_datasets()
+    X_train, X_val, _ = vectorize_text(X_train_texts, X_val_texts)
+    y_train = to_categorical(y_train, 2)
+    y_val = to_categorical(y_val, 2)
 
-# Выводим на экран  информационное сообщение
-print(f'Размеры текстов по порядку (в символах):')
+    model = build_model()
+    history = model.fit(
+        X_train,
+        y_train,
+        validation_data=(X_val, y_val),
+        epochs=15,
+        batch_size=32,
+        verbose=2,
+    )
 
-# Циклом проводим итерацию по списку с объёмами текстов
-for text_len in texts_len:
+    # Plot training and validation accuracy
+    plt.plot(history.history["accuracy"], label="train_accuracy")
+    plt.plot(history.history["val_accuracy"], label="val_accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.legend()
+    plt.show()
 
-  # Запускаем "счётчик" номера текста
-  t_num += 1
+    # Evaluation metrics
+    y_pred = model.predict(X_val).argmax(axis=1)
+    y_true = y_val.argmax(axis=1)
 
-  # Выводим на экран сообщение о номере и объёме текста
-  print(f'Текст №{t_num}: {text_len}')
+    cm = confusion_matrix(y_true, y_pred)
+    print("Confusion matrix:\n", cm)
+    print("Classification report:\n", classification_report(y_true, y_pred))
+    print("Validation accuracy:", history.history["val_accuracy"][-1])
 
-  # Вывод первых строк таблицы
-print(texts_list[0][0:1223])
 
-# Создаём список с вложенным циклом по длинам текстов, где i - 100% текста, i/5 - 20% текста
-train_len_shares = [(i - round(i/5)) for i in texts_len]
-
-# Устанавливаем "счётчик" номера текста
-t_num = 0
-
-# Циклом проводим итерацию по списку с объёмами текстов равными 80% от исходных
-for train_len_share in train_len_shares:
-
-  # Запускаем "счётчик" номера текста
-  t_num += 1
-
-  # Выводим на экран сообщение о номере и объёме текста в 80% от исходного
-  print(f'Доля 80% от текста №{t_num}: {train_len_share} символов')
-
-from itertools import chain
+if __name__ == '__main__':
+    main()
