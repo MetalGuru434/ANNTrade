@@ -4,11 +4,13 @@ import random
 import shutil
 import gdown
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, classification_report
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Embedding, SpatialDropout1D, GlobalAveragePooling1D, Dense
+import matplotlib.pyplot as plt
 
 DATA_URL = 'https://storage.yandexcloud.net/aiueducation/Content/base/l7/tesla.zip'
 DATA_DIR = 'tesla'
@@ -91,8 +93,31 @@ def main():
     y_val = to_categorical(y_val, 2)
 
     model = build_model()
-    history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=15, batch_size=32, verbose=2)
-    print('Validation accuracy:', history.history['val_accuracy'][-1])
+    history = model.fit(
+        X_train,
+        y_train,
+        validation_data=(X_val, y_val),
+        epochs=15,
+        batch_size=32,
+        verbose=2,
+    )
+
+    # Plot training and validation accuracy
+    plt.plot(history.history["accuracy"], label="train_accuracy")
+    plt.plot(history.history["val_accuracy"], label="val_accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.legend()
+    plt.show()
+
+    # Evaluation metrics
+    y_pred = model.predict(X_val).argmax(axis=1)
+    y_true = y_val.argmax(axis=1)
+
+    cm = confusion_matrix(y_true, y_pred)
+    print("Confusion matrix:\n", cm)
+    print("Classification report:\n", classification_report(y_true, y_pred))
+    print("Validation accuracy:", history.history["val_accuracy"][-1])
 
 
 if __name__ == '__main__':
