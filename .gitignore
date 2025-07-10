@@ -1,0 +1,14 @@
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+
+# Temporary files
+*~
+*.tmp
+*.log
+
+# Compiled libraries
+*.so
