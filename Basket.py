@@ -80,6 +80,47 @@ def check_MAE_predictl_DubbleInput (model,
 
 # ваше решение
 
+# Split the numerical and textual data into training and test parts
+from sklearn.model_selection import train_test_split
+from tensorflow.keras import Input, Model
+from tensorflow.keras.layers import Dense, Concatenate
+from tensorflow.keras.optimizers import Adam
+import matplotlib.pyplot as plt
+
+
+x_num_train, x_num_test, x_text_train, x_text_test, y_train, y_test = train_test_split(
+    xTrain, xBOW_text, yTrain, test_size=0.2, random_state=42
+)
+
+# Numerical branch of the model
+num_input = Input(shape=(x_num_train.shape[1],), name="num_input")
+num_branch = Dense(64, activation="relu")(num_input)
+num_branch = Dense(32, activation="relu")(num_branch)
+
+# Text branch of the model
+text_input = Input(shape=(x_text_train.shape[1],), name="text_input")
+text_branch = Dense(128, activation="relu")(text_input)
+text_branch = Dense(64, activation="relu")(text_branch)
+
+# Combine two branches
+combined = Concatenate()([num_branch, text_branch])
+combined = Dense(64, activation="relu")(combined)
+output = Dense(1, activation="linear")(combined)
+
+model = Model(inputs=[num_input, text_input], outputs=output)
+model.compile(optimizer=Adam(0.001), loss="mse")
+
+model.fit(
+    [x_num_train, x_text_train],
+    y_train,
+    validation_split=0.1,
+    epochs=10,
+    batch_size=32,
+    verbose=1,
+)
+
+check_MAE_predictl_DubbleInput(model, x_num_test, x_text_test, y_test, plot=True)
+
 
 
 
