@@ -111,4 +111,48 @@ data = np.array(data)
 columnsamount = data.shape[1]
 
 
-#Ваше решение
+# Split dataset without shuffling so that the test set contains the last part of the series
+target_idx = list(col).index('CLOSE') if 'CLOSE' in col else 0
+
+# Scale features
+scaler = MinMaxScaler()
+data_scaled = scaler.fit_transform(data)
+
+# Create sequences to predict the next value of the target column
+seq_len = 10
+X, y = [], []
+for i in range(len(data_scaled) - seq_len):
+    X.append(data_scaled[i:i + seq_len])
+    y.append(data_scaled[i + seq_len, target_idx])
+X = np.array(X)
+y = np.array(y)
+
+split = int(len(X) * 0.8)
+X_train, X_test = X[:split], X[split:]
+y_train, y_test = y[:split], y[split:]
+
+# Build a simple LSTM model
+model = Sequential([
+    LSTM(64, input_shape=(seq_len, columnsamount)),
+    Dense(32, activation='relu'),
+    Dense(1)
+])
+
+model.compile(optimizer=Adam(0.001), loss='mse')
+
+history = model.fit(
+    X_train,
+    y_train,
+    validation_data=(X_test, y_test),
+    epochs=20,
+    batch_size=32,
+    verbose=2,
+)
+
+plt.plot(history.history['loss'], label='train_loss')
+plt.plot(history.history['val_loss'], label='val_loss')
+plt.legend()
+plt.show()
+
+test_mse = model.evaluate(X_test, y_test, verbose=0)
+print('Test MSE:', test_mse)

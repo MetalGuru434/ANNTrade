@@ -1,6 +1,3 @@
-import re
-
-
 def clean_text(text: str) -> str:
     """Lowercase text and remove non-alphabetic characters."""
     text = text.lower()
