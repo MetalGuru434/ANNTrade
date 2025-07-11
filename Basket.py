@@ -112,3 +112,5 @@ for train_len_share in train_len_shares:
   print(f'Доля 80% от текста №{t_num}: {train_len_share} символов')
 
 from itertools import chain
+
+
