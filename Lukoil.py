@@ -29,7 +29,7 @@ import gdown
 import matplotlib.pyplot as plt
 
 # Отрисовка графики в ячейке colab
-%matplotlib inline
+#%matplotlib inline
 
 # Отключение предупреждений
 import warnings
