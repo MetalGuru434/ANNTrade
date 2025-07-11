@@ -110,4 +110,77 @@ data = np.array(data)
 # Переменная, для использования одной и той же архитектуры под разные матрицы
 columnsamount = data.shape[1]
 
+# ---------------------------------------------------------------------------
+# Новый вариант подготовки выборки и обучения модели. Для прогноза будем
+# использовать только исходные 5 столбцов ("OPEN", "MAX", "MIN",
+# "CLOSE", "VOLUME") без дополнительных признаков. В качестве входа сети
+# сформируем последовательность длиной 200: 100 последних точек с шагом 1 и
+# 100 точек с шагом 10. На каждой итерации будем предсказывать значение
+# следующего временного шага столбца CLOSE.
+
+# Получение исходных данных без расширения признаков
+base_data = pd.concat([data16_17, data18_19]).reset_index(drop=True)
+base_data = np.array(base_data)
+columnsamount = base_data.shape[1]
+
+# Индекс столбца, который будем предсказывать
+target_idx = list(data16_17.columns).index('CLOSE') if 'CLOSE' in data16_17.columns else 0
+
+# Масштабирование признаков
+scaler = MinMaxScaler()
+data_scaled = scaler.fit_transform(base_data)
+
+# Параметры формирования последовательностей
+step_one = 100
+step_ten = 100
+lookback = step_ten * 10  # самый дальний шаг
+seq_len = step_one + step_ten
+
+# Подготовка обучающих примеров
+X, y = [], []
+for i in range(lookback, len(data_scaled)):
+    # 100 точек с шагом 10 (отдалённое прошлое)
+    idx10 = [i - 10 * j for j in range(step_ten, 0, -1)]
+    seq10 = data_scaled[idx10]
+    # 100 последних точек подряд
+    seq1 = data_scaled[i - step_one:i]
+    seq = np.vstack([seq10, seq1])
+    X.append(seq)
+    y.append(data_scaled[i, target_idx])
+
+X = np.array(X)
+y = np.array(y)
+
+# Разделение на обучающую и тестовую выборки
+split = int(len(X) * 0.8)
+X_train, X_test = X[:split], X[split:]
+y_train, y_test = y[:split], y[split:]
+
+# Модель LSTM с увеличенным окном просмотра
+model = Sequential([
+    LSTM(128, return_sequences=True, input_shape=(seq_len, columnsamount)),
+    LSTM(64),
+    Dense(32, activation='relu'),
+    Dense(1)
+])
+
+model.compile(optimizer=Adam(0.001), loss='mse')
+
+history = model.fit(
+    X_train,
+    y_train,
+    validation_data=(X_test, y_test),
+    epochs=20,
+    batch_size=32,
+    verbose=2,
+)
+
+plt.plot(history.history['loss'], label='train_loss')
+plt.plot(history.history['val_loss'], label='val_loss')
+plt.legend()
+plt.show()
+
+test_mse = model.evaluate(X_test, y_test, verbose=0)
+print('Test MSE:', test_mse)
+
 
