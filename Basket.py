@@ -1,126 +1,114 @@
-# Загрузка из google облака
-import gdown
-gdown.download('https://storage.yandexcloud.net/aiueducation/Content/base/l10/basketball.csv', None, quiet=True)
-
-# Библиотека для работы с базами
-import pandas as pd
-df = pd.read_csv('basketball.csv', encoding= 'cp1251', sep=';', header=0, index_col=0) # Загружаем базу
-df.head()
-
-#Извлекаем текстовые данные из колонки `info` таблицы, помещаем в переменную `data_text`. 
-#Выводим длину списка:
-
-data_text = df['info'].values #
-
-len(data_text) #
-
-#Задаем максимальное кол-во слов в словаре, помещаем в переменную все символы, 
-#которые хотим вычистить из текста.
-#Токенизируем текстовые данные:
-
-# Импортируем токенайзер
-from tensorflow.keras.preprocessing.text import Tokenizer
-
-maxWordsCount = 5000
-
-sim_for_del='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n'
-
-tokenizer = Tokenizer (num_words=maxWordsCount,
-                       filters=sim_for_del,
-                       lower=True,
-                       split=' ',
-                       oov_token='unknown',
-                       char_level=False)
-
-tokenizer.fit_on_texts(data_text)
-
-# Переводим в Эмбеддинг пространство
-Sequences = tokenizer.texts_to_sequences(data_text)
-
-# Вариант  Bag of Words
-xBOW_text = tokenizer.sequences_to_matrix(Sequences)
-
-#Преобразуем данные в numpy, подготовим наборы для обучения
-# Библиотека работы с массивами
+# Работа с массивами данных
 import numpy as np
 
-xTrain = np.array(df[['Ком. 1','Ком. 2', 'Минута', 'Секунда','ftime']].astype('int'))
-yTrain = np.array(df['fcount'].astype('int'))
+# Работа с таблицами
+import pandas as pd
 
-print(xTrain.shape)
-print(yTrain.shape)
-print(xBOW_text.shape)
-
-
-# Функция по проверке ошибки
-
-def check_MAE_predictl_DubbleInput (model,
-                                    x_data,
-                                    x_data_text,
-                                    y_data_not_scaled,
-                                    plot=False):
-
-  mae = 0 # Инициализируем начальное значение ошибки
-  y_pred = (model.predict([x_data,x_data_text])).squeeze()
-
-  for n in range (0,len(x_data)):
-    mae += abs(y_data_not_scaled[n] - y_pred[n]) # Увеличиваем значение ошибки для текущего элемента
-  mae /= len(x_data) # Считаем среднее значение
-  print('Среднаяя абслолютная ошибка {:.3f} очков это {:.3f}% от общей выборки в {} игры'.format(mae, (mae/y_data_not_scaled.mean(axis=0))*100,len(x_data)))
-
-  if plot:
-     plt.scatter(y_data_not_scaled, y_pred)
-     plt.xlabel('Правильные значение')
-     plt.ylabel('Предсказания')
-     plt.axis('equal')
-     plt.xlim(plt.xlim())
-     plt.ylim(plt.ylim())
-     plt.plot([0, 250], [0, 250])
-     plt.show()
-
-# ваше решение
-
-# Split the numerical and textual data into training and test parts
-from sklearn.model_selection import train_test_split
-from tensorflow.keras import Input, Model
-from tensorflow.keras.layers import Dense, Concatenate
-from tensorflow.keras.optimizers import Adam
+# Отрисовка графиков
 import matplotlib.pyplot as plt
 
+# Функции-утилиты для работы с категориальными данными
+from tensorflow.keras import utils
 
-x_num_train, x_num_test, x_text_train, x_text_test, y_train, y_test = train_test_split(
-    xTrain, xBOW_text, yTrain, test_size=0.2, random_state=42
-)
+# Класс для конструирования последовательной модели нейронной сети
+from tensorflow.keras.models import Sequential
 
-# Numerical branch of the model
-num_input = Input(shape=(x_num_train.shape[1],), name="num_input")
-num_branch = Dense(64, activation="relu")(num_input)
-num_branch = Dense(32, activation="relu")(num_branch)
+# Основные слои
+from tensorflow.keras.layers import Dense, Dropout, SpatialDropout1D, BatchNormalization, Embedding, Flatten, Activation
 
-# Text branch of the model
-text_input = Input(shape=(x_text_train.shape[1],), name="text_input")
-text_branch = Dense(128, activation="relu")(text_input)
-text_branch = Dense(64, activation="relu")(text_branch)
+# Токенизатор для преобразование текстов в последовательности
+from tensorflow.keras.preprocessing.text import Tokenizer
 
-# Combine two branches
-combined = Concatenate()([num_branch, text_branch])
-combined = Dense(64, activation="relu")(combined)
-output = Dense(1, activation="linear")(combined)
+# Заполнение последовательностей до определенной длины
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-model = Model(inputs=[num_input, text_input], outputs=output)
-model.compile(optimizer=Adam(0.001), loss="mse")
+# Загрузка датасетов из облака google
+import gdown
 
-model.fit(
-    [x_num_train, x_text_train],
-    y_train,
-    validation_split=0.1,
-    epochs=10,
-    batch_size=32,
-    verbose=1,
-)
+# Для работы с файлами в Colaboratory
+import os
 
-check_MAE_predictl_DubbleInput(model, x_num_test, x_text_test, y_test, plot=True)
+# Отрисовка графиков
+import matplotlib.pyplot as plt
 
+%matplotlib inline
 
+gdown.download('https://storage.yandexcloud.net/aiueducation/Content/base/l7/tesla.zip', None, quiet=True)
 
+# Распаковка архива в папку writers
+!unzip -qo tesla.zip -d tesla/
 
+# Просмотр содержимого папки
+!ls tesla
+
+  # Объявляем функции для чтения файла. На вход отправляем путь к файлу
+def read_text(file_name):
+
+  # Задаем открытие нужного файла в режиме чтения
+  read_file = open(file_name, 'r')
+
+  # Читаем текст
+  text = read_file.read()
+
+  # Переносы строки переводим в пробелы
+  text = text.replace("\n", " ")
+
+  # Возвращаем текст файла
+  return text
+
+# Объявляем интересующие нас классы
+class_names = ["Негативный отзыв", "Позитивный отзыв"]
+
+# Считаем количество классов
+num_classes = len(class_names)
+
+import os
+# Создаём список под тексты для обучающей выборки
+texts_list = []
+
+# Циклом проводим итерацию по текстовым файлам в папке отзывов
+for j in os.listdir('/content/tesla/'):
+
+  # Добавляем каждый файл в общий список для выборки
+        texts_list.append(read_text('/content/tesla/' + j))
+
+        # Выводим на экран сообщение о добавлении файла
+        print(j, 'добавлен в обучающую выборку')
+
+# Узнаем объём каждого текста в символах
+texts_len = [len(text) for text in texts_list]
+
+# Устанавливаем "счётчик" номера текста
+t_num = 0
+
+# Выводим на экран  информационное сообщение
+print(f'Размеры текстов по порядку (в символах):')
+
+# Циклом проводим итерацию по списку с объёмами текстов
+for text_len in texts_len:
+
+  # Запускаем "счётчик" номера текста
+  t_num += 1
+
+  # Выводим на экран сообщение о номере и объёме текста
+  print(f'Текст №{t_num}: {text_len}')
+
+  # Вывод первых строк таблицы
+print(texts_list[0][0:1223])
+
+# Создаём список с вложенным циклом по длинам текстов, где i - 100% текста, i/5 - 20% текста
+train_len_shares = [(i - round(i/5)) for i in texts_len]
+
+# Устанавливаем "счётчик" номера текста
+t_num = 0
+
+# Циклом проводим итерацию по списку с объёмами текстов равными 80% от исходных
+for train_len_share in train_len_shares:
+
+  # Запускаем "счётчик" номера текста
+  t_num += 1
+
+  # Выводим на экран сообщение о номере и объёме текста в 80% от исходного
+  print(f'Доля 80% от текста №{t_num}: {train_len_share} символов')
+
+from itertools import chain
