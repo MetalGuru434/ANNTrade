@@ -114,3 +114,76 @@ for train_len_share in train_len_shares:
 from itertools import chain
 
 
+def load_reviews(path):
+    """Read reviews from a text file and return unique non-empty lines."""
+    with open(path, 'r', encoding='utf-8') as f:
+        lines = [line.strip() for line in f if line.strip()]
+    # remove duplicates while preserving order
+    return list(dict.fromkeys(lines))
+
+
+DATA_DIR = 'tesla'
+
+# Пути к файлам с отзывами
+neg_path = os.path.join(DATA_DIR, 'Негативный отзыв.txt')
+pos_path = os.path.join(DATA_DIR, 'Позитивный отзыв.txt')
+
+# Загрузка и балансировка базы отзывов
+neg_reviews = load_reviews(neg_path)
+pos_reviews = load_reviews(pos_path)
+
+min_len = min(len(neg_reviews), len(pos_reviews))
+np.random.seed(42)
+np.random.shuffle(neg_reviews)
+np.random.shuffle(pos_reviews)
+neg_reviews = neg_reviews[:min_len]
+pos_reviews = pos_reviews[:min_len]
+
+texts = neg_reviews + pos_reviews
+labels = [0] * len(neg_reviews) + [1] * len(pos_reviews)
+
+# Разделяем данные на обучающую и проверочную выборки
+from sklearn.model_selection import train_test_split
+
+train_texts, val_texts, y_train, y_val = train_test_split(
+    texts, labels, test_size=0.2, random_state=42, stratify=labels
+)
+
+# Векторизация текстов
+vocab_size = 10000
+max_len = 50
+tokenizer = Tokenizer(num_words=vocab_size, oov_token='<OOV>')
+tokenizer.fit_on_texts(train_texts)
+X_train = pad_sequences(tokenizer.texts_to_sequences(train_texts), maxlen=max_len, padding='post')
+X_val = pad_sequences(tokenizer.texts_to_sequences(val_texts), maxlen=max_len, padding='post')
+
+# Преобразование меток
+y_train = utils.to_categorical(y_train, num_classes)
+y_val = utils.to_categorical(y_val, num_classes)
+
+# Построение модели
+model = Sequential([
+    Embedding(vocab_size, 128, input_length=max_len),
+    SpatialDropout1D(0.2),
+    Flatten(),
+    Dense(64, activation='relu'),
+    Dropout(0.2),
+    Dense(num_classes, activation='softmax'),
+])
+
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Обучение сети
+history = model.fit(
+    X_train,
+    y_train,
+    validation_data=(X_val, y_val),
+    epochs=10,
+    batch_size=32,
+    verbose=2,
+)
+
+loss, accuracy = model.evaluate(X_val, y_val, verbose=0)
+print('Validation accuracy:', accuracy)
+
+
