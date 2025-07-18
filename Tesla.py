@@ -8,15 +8,26 @@ from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Embedding, SpatialDropout1D, GlobalAveragePooling1D, Dense
-from sklearn.model_selection import train_test_split
+from tensorflow.keras.layers import (
+    Embedding,
+    LSTM,
+    Bidirectional,
+    Dropout,
+    Dense,
+)
 from sklearn.metrics import confusion_matrix, classification_report
+from tensorflow.keras.callbacks import EarlyStopping
 import seaborn as sns
+import matplotlib.pyplot as plt
+from preprocess import clean_text
 
 
 DATA_URL = 'https://storage.yandexcloud.net/aiueducation/Content/base/l7/tesla.zip'
 DATA_DIR = 'tesla'
 ZIP_PATH = 'tesla.zip'
+
+# Labels used in evaluation plots
+class_names = ["Негативный", "Позитивный"]
 
 
 def download_and_extract():
@@ -53,8 +64,8 @@ def prepare_datasets():
     neg_path = os.path.join(DATA_DIR, 'Негативный отзыв.txt')
     pos_path = os.path.join(DATA_DIR, 'Позитивный отзыв.txt')
 
-    neg_reviews = read_reviews(neg_path)
-    pos_reviews = read_reviews(pos_path)
+    neg_reviews = [clean_text(r) for r in read_reviews(neg_path)]
+    pos_reviews = [clean_text(r) for r in read_reviews(pos_path)]
 
     min_len = min(len(neg_reviews), len(pos_reviews))
     random.seed(42)
@@ -68,34 +79,56 @@ def prepare_datasets():
     return train_test_split(texts, labels, test_size=0.2, random_state=42, stratify=labels)
 
 
-def vectorize_text(train_texts, val_texts, vocab_size=20000, max_len=50):
-    tokenizer = Tokenizer(num_words=vocab_size, oov_token='<OOV>')
+def vectorize_text(
+    train_texts,
+    val_texts,
+    vocab_size: int = 20000,
+    max_len: int = 100,
+):
+    """Tokenize and pad text sequences."""
+    tokenizer = Tokenizer(num_words=vocab_size, oov_token="<OOV>")
     tokenizer.fit_on_texts(train_texts)
-    X_train = pad_sequences(tokenizer.texts_to_sequences(train_texts), maxlen=max_len, padding='post')
-    X_val = pad_sequences(tokenizer.texts_to_sequences(val_texts), maxlen=max_len, padding='post')
+    X_train = pad_sequences(
+        tokenizer.texts_to_sequences(train_texts), maxlen=max_len, padding="post"
+    )
+    X_val = pad_sequences(
+        tokenizer.texts_to_sequences(val_texts), maxlen=max_len, padding="post"
+    )
     return X_train, X_val, tokenizer
 
 
-def build_model(vocab_size=10000, max_len=50):
+def build_model(vocab_size: int = 10000, max_len: int = 100) -> Sequential:
+    """Build a text classification model with an LSTM layer."""
     model = Sequential([
         Embedding(vocab_size, 128, input_length=max_len),
-        SpatialDropout1D(0.2),
-        GlobalAveragePooling1D(),
-        Dense(64, activation='relu'),
-        Dense(2, activation='softmax')
+        Bidirectional(LSTM(64)),
+        Dropout(0.3),
+        Dense(64, activation="relu"),
+        Dense(2, activation="softmax"),
     ])
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    model.compile(
+        optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"]
+    )
     return model
 
 
-#main()
+# main
 X_train_texts, X_val_texts, y_train, y_val = prepare_datasets()
-X_train, X_val, _ = vectorize_text(X_train_texts, X_val_texts)
+X_train, X_val, _ = vectorize_text(X_train_texts, X_val_texts, max_len=100)
 y_train = to_categorical(y_train, 2)
 y_val = to_categorical(y_val, 2)
 
-model = build_model()
-history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=20, batch_size=32, verbose=2)
+model = build_model(max_len=100)
+callbacks = [EarlyStopping(patience=3, restore_best_weights=True)]
+history = model.fit(
+    X_train,
+    y_train,
+    validation_data=(X_val, y_val),
+    epochs=20,
+    batch_size=32,
+    verbose=2,
+    callbacks=callbacks,
+)
 
 # Plot training and validation accuracy
 plt.plot(history.history["accuracy"], label="train_accuracy")
