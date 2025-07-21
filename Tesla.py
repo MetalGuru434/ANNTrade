@@ -4,6 +4,7 @@ import random
 import shutil
 import gdown
 from sklearn.model_selection import train_test_split
+from sklearn.utils import resample
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.utils import to_categorical
@@ -67,12 +68,24 @@ def prepare_datasets():
     neg_reviews = [clean_text(r) for r in read_reviews(neg_path)]
     pos_reviews = [clean_text(r) for r in read_reviews(pos_path)]
 
-    min_len = min(len(neg_reviews), len(pos_reviews))
     random.seed(42)
     random.shuffle(neg_reviews)
     random.shuffle(pos_reviews)
-    neg_reviews = neg_reviews[:min_len]
-    pos_reviews = pos_reviews[:min_len]
+    # Oversample the minority class to balance the dataset
+    if len(neg_reviews) < len(pos_reviews):
+        neg_reviews = resample(
+            neg_reviews,
+            replace=True,
+            n_samples=len(pos_reviews),
+            random_state=42,
+        )
+    elif len(pos_reviews) < len(neg_reviews):
+        pos_reviews = resample(
+            pos_reviews,
+            replace=True,
+            n_samples=len(neg_reviews),
+            random_state=42,
+        )
 
     texts = neg_reviews + pos_reviews
     labels = [0] * len(neg_reviews) + [1] * len(pos_reviews)
