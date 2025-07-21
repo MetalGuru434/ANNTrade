@@ -16,3 +16,7 @@ python3 Lukoil.py
 ```
 
 Datasets are downloaded automatically via `gdown`.
+
+When working with imbalanced datasets, you can oversample the minority
+class with `sklearn.utils.resample` or pass `class_weight` to
+`model.fit` for better training stability.
