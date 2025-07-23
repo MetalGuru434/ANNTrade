@@ -23,7 +23,7 @@ class CosModel(tf.keras.Model):
         self.a = tf.Variable(1.0, trainable=True, dtype=tf.float32, name="a")
         self.b = tf.Variable(0.0, trainable=True, dtype=tf.float32, name="b")
 
-    def call(self, inputs):
+    def __call__(self, inputs):
         return tf.cos(self.a * inputs + self.b)
 
 
@@ -39,9 +39,11 @@ def main():
             tf.TensorSpec(shape=(), dtype=tf.float32),
             tf.TensorSpec(shape=(), dtype=tf.float32),
         ),
-    ).batch(32)
+    ).batch(32).repeat()
 
     model = CosModel()
+    if not model.trainable_variables:
+        raise RuntimeError("Model has no trainable variables")
     model.compile(optimizer=tf.keras.optimizers.Adam(0.1), loss=mse)
 
     model.fit(dataset, epochs=200, verbose=0)
