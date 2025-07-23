@@ -20,8 +20,12 @@ class CosModel(tf.keras.Model):
 
     def __init__(self):
         super().__init__()
-        self.a = self.add_weight("a", shape=(), initializer="ones")
-        self.b = self.add_weight("b", shape=(), initializer="zeros")
+        # Explicitly pass the parameter names to avoid conflicts across
+        # different TensorFlow versions where ``shape`` might be the second
+        # positional argument. Using keyword arguments ensures the code works
+        # regardless of the expected parameter order.
+        self.a = self.add_weight(name="a", shape=(), initializer="ones")
+        self.b = self.add_weight(name="b", shape=(), initializer="zeros")
 
     def call(self, inputs):
         return tf.cos(self.a * inputs + self.b)
