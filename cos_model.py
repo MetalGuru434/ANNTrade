@@ -43,7 +43,7 @@ def main():
             tf.TensorSpec(shape=(), dtype=tf.float32),
             tf.TensorSpec(shape=(), dtype=tf.float32),
         ),
-    ).batch(32).repeat()
+    ).batch(32)
 
     model = CosModel()
     if len(model.trainable_variables) != 2:
