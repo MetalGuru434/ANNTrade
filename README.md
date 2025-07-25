@@ -7,12 +7,14 @@ This repository demonstrates small projects using neural networks for working wi
 - `Basket.py` – basketball score prediction with textual features.
 - `Texts_processing.py` – sentiment classification for reviews.
 - `preprocess.py` – helper utilities used in tests.
+- `cifar10_convnet.py` – convolutional network for CIFAR-10 images.
 
 ## Usage
 Install requirements (TensorFlow, pandas, scikit-learn, etc.) and run any script with Python 3:
 
 ```bash
 python3 Lukoil.py
+python3 cifar10_convnet.py
 ```
 
 Datasets are downloaded automatically via `gdown`.

@@ -4,6 +4,14 @@ from tensorflow.keras.utils import to_categorical
 import matplotlib.pyplot as plt
 
 
+data_augmentation = tf.keras.Sequential(
+    [
+        tf.keras.layers.RandomFlip("horizontal"),
+        tf.keras.layers.RandomRotation(0.1),
+    ]
+)
+
+
 def main() -> None:
     """Train a CNN on the CIFAR10 dataset and visualize predictions."""
     # Load and preprocess data
@@ -13,13 +21,20 @@ def main() -> None:
     y_train = to_categorical(y_train, 10)
     y_test = to_categorical(y_test, 10)
 
-    # Create TensorFlow datasets
+    # Create TensorFlow datasets with augmentation and validation split
     batch_size = 64
+    val_split = 0.1
+    num_val = int(len(x_train) * val_split)
+    x_val, y_val = x_train[:num_val], y_train[:num_val]
+    x_train, y_train = x_train[num_val:], y_train[num_val:]
+
     train_ds = (
         tf.data.Dataset.from_tensor_slices((x_train, y_train))
         .shuffle(50000)
+        .map(lambda x, y: (data_augmentation(x), y))
         .batch(batch_size)
     )
+    val_ds = tf.data.Dataset.from_tensor_slices((x_val, y_val)).batch(batch_size)
     test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test)).batch(batch_size)
 
     # Build model
@@ -32,11 +47,15 @@ def main() -> None:
                 padding="same",
                 input_shape=(32, 32, 3),
             ),
+            tf.keras.layers.BatchNormalization(),
             tf.keras.layers.Conv2D(32, (3, 3), activation="relu", padding="same"),
+            tf.keras.layers.BatchNormalization(),
             tf.keras.layers.MaxPooling2D(),
             tf.keras.layers.Dropout(0.25),
             tf.keras.layers.Conv2D(64, (3, 3), activation="relu", padding="same"),
+            tf.keras.layers.BatchNormalization(),
             tf.keras.layers.Conv2D(64, (3, 3), activation="relu", padding="same"),
+            tf.keras.layers.BatchNormalization(),
             tf.keras.layers.MaxPooling2D(),
             tf.keras.layers.Dropout(0.25),
             tf.keras.layers.Flatten(),
@@ -48,7 +67,7 @@ def main() -> None:
     model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
 
     # Train model
-    model.fit(train_ds, epochs=20, validation_data=test_ds)
+    model.fit(train_ds, epochs=30, validation_data=val_ds)
 
     # Evaluate
     _, test_acc = model.evaluate(test_ds)
