@@ -1,5 +1,6 @@
 import os
 import re
+import argparse
 from typing import List, Tuple
 
 import numpy as np
@@ -123,7 +124,16 @@ def build_model(num_features: int, vocab_size: int, max_len: int = 100) -> Model
 
 
 def main():
-    df = load_dataset("moscow.csv")
+    parser = argparse.ArgumentParser(description="Train regression on Moscow apartment dataset")
+    parser.add_argument(
+        "dataset",
+        nargs="?",
+        default=os.environ.get("MOSCOW_DATA", "moscow.csv"),
+        help="Path to dataset CSV (can also be set via MOSCOW_DATA env var)",
+    )
+    args = parser.parse_args()
+
+    df = load_dataset(args.dataset)
     X_train_num, X_train_txt, X_test_num, X_test_txt, y_train, y_test, tokenizer, scaler = prepare_train_data(df)
     model: Model = build_model(
         X_train_num.shape[1],

@@ -22,3 +22,22 @@ Datasets are downloaded automatically via `gdown`.
 When working with imbalanced datasets, you can oversample the minority
 class with `sklearn.utils.resample` or pass `class_weight` to
 `model.fit` for better training stability.
+
+## Moscow apartment dataset
+The `moscow_regression.py` example expects a CSV file with information
+about Moscow real estate. You can obtain such data from open sources
+like [data.mos.ru](https://data.mos.ru) or community datasets on Kaggle.
+Save the file as `moscow.csv` or pass its path via the `--dataset`
+argument (or `MOSCOW_DATA` environment variable).
+
+Typical column names in Russian should be mapped to the names used by
+the script:
+
+| Russian column | Used in code |
+| -------------- | ------------ |
+| `Комнат`       | `rooms`      |
+| `Площадь`      | `square`     |
+| `Этаж`         | `floor`      |
+| `Цена`         | `price`      |
+
+Make sure to rename the columns accordingly before running the model.
