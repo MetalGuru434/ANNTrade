@@ -72,6 +72,12 @@ def build_text_data(texts: List[str], vocab_size: int = 20000, max_len: int = 10
     return padded, tokenizer
 
 
+def vectorize_texts(texts: List[str], tokenizer: Tokenizer, max_len: int) -> np.ndarray:
+    """Tokenize and pad texts using an existing tokenizer."""
+    seqs = tokenizer.texts_to_sequences(texts)
+    return pad_sequences(seqs, maxlen=max_len, padding="post")
+
+
 def prepare_train_data(
     df: pd.DataFrame,
 ) -> Tuple[
@@ -95,7 +101,7 @@ def prepare_train_data(
     X_test_num = scaler.transform(X_test_num)
 
     X_train_txt, tokenizer = build_text_data(desc_train)
-    X_test_txt, _ = build_text_data(desc_test, vocab_size=len(tokenizer.word_index) + 1)
+    X_test_txt = vectorize_texts(desc_test, tokenizer, max_len=X_train_txt.shape[1])
     return X_train_num, X_train_txt, X_test_num, X_test_txt, y_train, y_test, tokenizer, scaler
 
 
