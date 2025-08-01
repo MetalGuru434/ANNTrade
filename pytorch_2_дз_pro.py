@@ -160,3 +160,121 @@ x_data = x_data / 255.
 """# Решение"""
 
 # Ваше решение
+
+import torch
+from torch import nn
+from torch.utils.data import DataLoader, TensorDataset, random_split
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+
+# подготовка данных
+x_tensor = torch.tensor(x_data).permute(0, 3, 1, 2).float()
+y_tensor = torch.tensor(y_data).long()
+dataset = TensorDataset(x_tensor, y_tensor)
+
+train_size = int(len(dataset) * 0.8)
+val_size = int(len(dataset) * 0.1)
+test_size = len(dataset) - train_size - val_size
+train_ds, val_ds, test_ds = random_split(dataset, [train_size, val_size, test_size])
+
+train_loader = DataLoader(train_ds, batch_size=32, shuffle=True)
+val_loader = DataLoader(val_ds, batch_size=32)
+test_loader = DataLoader(test_ds, batch_size=32)
+
+# модель
+class ConvNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 16, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2),
+            nn.Conv2d(16, 32, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2)
+        )
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(32 * (IMG_HEIGHT // 4) * (IMG_WIDTH // 4), 128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(128, CLASS_COUNT)
+        )
+
+    def forward(self, x):
+        x = self.features(x)
+        return self.classifier(x)
+
+model = ConvNet()
+criterion = nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+
+epochs = 10
+train_loss, val_loss = [], []
+train_acc, val_acc = [], []
+
+for epoch in range(epochs):
+    # train
+    model.train()
+    epoch_loss, correct = 0.0, 0
+    for xb, yb in train_loader:
+        optimizer.zero_grad()
+        out = model(xb)
+        loss = criterion(out, yb)
+        loss.backward()
+        optimizer.step()
+        epoch_loss += loss.item() * xb.size(0)
+        correct += (out.argmax(1) == yb).sum().item()
+    train_loss.append(epoch_loss / len(train_ds))
+    train_acc.append(correct / len(train_ds))
+
+    # validation
+    model.eval()
+    epoch_loss, correct = 0.0, 0
+    with torch.no_grad():
+        for xb, yb in val_loader:
+            out = model(xb)
+            loss = criterion(out, yb)
+            epoch_loss += loss.item() * xb.size(0)
+            correct += (out.argmax(1) == yb).sum().item()
+    val_loss.append(epoch_loss / len(val_ds))
+    val_acc.append(correct / len(val_ds))
+    print(f"Epoch {epoch + 1}: train_loss={train_loss[-1]:.4f}, val_loss={val_loss[-1]:.4f}")
+
+# визуализация loss/accuracy
+plt.figure()
+plt.plot(train_loss, label="train_loss")
+plt.plot(val_loss, label="val_loss")
+plt.xlabel("epoch")
+plt.ylabel("loss")
+plt.legend()
+plt.show()
+
+plt.figure()
+plt.plot(train_acc, label="train_acc")
+plt.plot(val_acc, label="val_acc")
+plt.xlabel("epoch")
+plt.ylabel("accuracy")
+plt.legend()
+plt.show()
+
+# ConfusionMatrixDisplay
+model.eval()
+y_true, y_pred = [], []
+with torch.no_grad():
+    for xb, yb in test_loader:
+        preds = model(xb).argmax(1)
+        y_pred.extend(preds.tolist())
+        y_true.extend(yb.tolist())
+
+cm = confusion_matrix(y_true, y_pred)
+ConfusionMatrixDisplay(cm, display_labels=CLASS_LIST).plot(xticks_rotation="vertical")
+plt.show()
+
+# инференс на случайном изображении теста
+idx = random.randrange(len(test_ds))
+image, label = test_ds[idx]
+model.eval()
+with torch.no_grad():
+    pred = model(image.unsqueeze(0)).argmax(1).item()
+
+print(f"Predicted class: {CLASS_LIST[pred]}")
+plt.imshow(image.permute(1, 2, 0))
+plt.title(f"Predicted: {CLASS_LIST[pred]}")
+plt.axis("off")
+plt.show()
