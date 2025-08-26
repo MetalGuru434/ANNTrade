@@ -9,8 +9,16 @@ This repository demonstrates small projects using neural networks for working wi
 - `preprocess.py` – helper utilities used in tests.
 - `cifar10_convnet.py` – convolutional network for CIFAR-10 images.
 
+## Installation
+
+Install the dependencies, including AutoKeras (>=1.0.20), with:
+
+```bash
+pip install -r requirements.txt
+```
+
 ## Usage
-Install requirements (TensorFlow, pandas, scikit-learn, etc.) and run any script with Python 3:
+After installing the dependencies, run any script with Python 3:
 
 ```bash
 python3 Lukoil.py
