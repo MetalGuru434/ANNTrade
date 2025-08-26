@@ -1,0 +1,7 @@
+autokeras>=1.0.20
+gdown
+matplotlib
+numpy
+pandas
+scikit-learn
+tensorflow
