@@ -45,7 +45,7 @@ import zipfile
 import requests
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LinearRegression
+import autokeras as ak
 
 # ensure dataset is available
 DATA_DIR = 'data'
@@ -66,17 +66,21 @@ df['<DATE>'] = pd.to_datetime(df['<DATE>'], format='%Y%m%d')
 train_df = df.iloc[:1300].reset_index(drop=True)
 val_df = df.iloc[1300:1300 + 165].reset_index(drop=True)
 
-X_train = train_df[['<OPEN>', '<HIGH>', '<LOW>']]
-y_train = train_df['<CLOSE>']
-X_val = val_df[['<OPEN>', '<HIGH>', '<LOW>']]
-val_df['y_true'] = val_df['<CLOSE>']
+X_train = train_df[['<OPEN>', '<HIGH>', '<LOW>']].to_numpy()
+y_train = train_df['<CLOSE>'].to_numpy()
+X_val = val_df[['<OPEN>', '<HIGH>', '<LOW>']].to_numpy()
+y_val = val_df['<CLOSE>'].to_numpy()
+val_df['y_true'] = y_val
 
-# model training
-model = LinearRegression()
-model.fit(X_train, y_train)
+# AutoKeras model search and training
+reg = ak.StructuredDataRegressor(max_trials=10, overwrite=True)
+reg.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=100)
 
-# predictions
-val_df['y_pred'] = model.predict(X_val)
+# export best model and predictions
+best_model = reg.export_model()
+preds = best_model.predict(X_val).flatten()
+val_df['y_pred'] = preds
+print('Validation MSE:', np.mean((preds - y_val) ** 2))
 
 # visualization on 30-day segments
 segment_length = 30
