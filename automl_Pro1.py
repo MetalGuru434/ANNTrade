@@ -71,6 +71,14 @@ def train_and_evaluate(n):
     X_val   = vectorizer.transform(X_val).toarray()
     X_test  = vectorizer.transform(X_test).toarray()
 
+    # Ensure data is in the correct float32 format for TensorFlow
+    X_train = np.asarray(X_train, dtype="float32")
+    X_val   = np.asarray(X_val,   dtype="float32")
+    X_test  = np.asarray(X_test,  dtype="float32")
+    y_train = np.asarray(y_train, dtype="float32")
+    y_val   = np.asarray(y_val,   dtype="float32")
+    y_test  = np.asarray(y_test,  dtype="float32")
+
     model = Sequential([
         Dense(128, activation='relu', input_shape=(X_train.shape[1],)),
         Dropout(0.3),
