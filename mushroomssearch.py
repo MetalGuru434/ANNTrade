@@ -87,9 +87,25 @@ import matplotlib.pyplot as plt
 results_csv = Path("runs/detect/train_yolov8m/results.csv")
 if results_csv.exists():
     history = pd.read_csv(results_csv)
+    # Ultralytics CSV formats change over time. Some versions log individual
+    # loss components (e.g. ``train/box_loss``) instead of a single total loss.
+    # To keep this script compatible we dynamically collect all train/ and
+    # val/ columns that end with "loss" and sum them to obtain total losses.
+    train_losses = [c for c in history.columns if c.startswith("train/") and c.endswith("loss")]
+    val_losses = [c for c in history.columns if c.startswith("val/") and c.endswith("loss")]
+    if train_losses:
+        history["train/total_loss"] = history[train_losses].sum(axis=1)
+    if val_losses:
+        history["val/total_loss"] = history[val_losses].sum(axis=1)
+
+    # Prefer the aggregated "train/total_loss" and "val/total_loss" columns,
+    # but fall back to legacy "train/loss" and "val/loss" if necessary.
+    train_loss_col = "train/total_loss" if "train/total_loss" in history.columns else "train/loss"
+    val_loss_col = "val/total_loss" if "val/total_loss" in history.columns else "val/loss"
+
     plt.figure(figsize=(8, 6))
-    plt.plot(history["epoch"], history["train/loss"], label="train/loss")
-    plt.plot(history["epoch"], history["val/loss"], label="val/loss")
+    plt.plot(history["epoch"], history[train_loss_col], label=train_loss_col)
+    plt.plot(history["epoch"], history[val_loss_col], label=val_loss_col)
     if "metrics/mAP50" in history.columns:
         plt.plot(history["epoch"], history["metrics/mAP50"], label="mAP50")
     plt.xlabel("Epoch")
