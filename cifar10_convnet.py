@@ -67,7 +67,21 @@ def main() -> None:
     model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
 
     # Train model
-    model.fit(train_ds, epochs=30, validation_data=val_ds)
+    history = model.fit(train_ds, epochs=30, validation_data=val_ds)
+
+    # Plot training history
+    plt.figure(figsize=(12, 5))
+    plt.subplot(1, 2, 1)
+    plt.plot(history.history["loss"], label="train")
+    plt.plot(history.history["val_loss"], label="val")
+    plt.title("Loss")
+    plt.legend()
+    plt.subplot(1, 2, 2)
+    plt.plot(history.history["accuracy"], label="train")
+    plt.plot(history.history["val_accuracy"], label="val")
+    plt.title("Accuracy")
+    plt.legend()
+    plt.show()
 
     # Evaluate
     _, test_acc = model.evaluate(test_ds)
@@ -86,15 +100,16 @@ def main() -> None:
         "ship",
         "truck",
     ]
-    images = x_test[:10]
+    images = x_test[:4]
     preds = model.predict(images).argmax(axis=1)
 
-    plt.figure(figsize=(10, 4))
-    for i in range(10):
-        plt.subplot(2, 5, i + 1)
+    plt.figure(figsize=(6, 6))
+    for i in range(4):
+        plt.subplot(2, 2, i + 1)
         plt.imshow(images[i])
-        plt.title(class_names[preds[i]])
-        plt.axis("off")
+        plt.xticks([])
+        plt.yticks([])
+        plt.xlabel(class_names[preds[i]])
     plt.tight_layout()
     plt.show()
 
