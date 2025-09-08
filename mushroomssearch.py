@@ -81,6 +81,28 @@ results = model.train(
     exist_ok=True
 )
 
+# Build training curves
+import pandas as pd
+import matplotlib.pyplot as plt
+results_csv = Path("runs/detect/train_yolov8m/results.csv")
+if results_csv.exists():
+    history = pd.read_csv(results_csv)
+    plt.figure(figsize=(8, 6))
+    plt.plot(history["epoch"], history["train/loss"], label="train/loss")
+    plt.plot(history["epoch"], history["val/loss"], label="val/loss")
+    if "metrics/mAP50" in history.columns:
+        plt.plot(history["epoch"], history["metrics/mAP50"], label="mAP50")
+    plt.xlabel("Epoch")
+    plt.ylabel("Value")
+    plt.title("YOLOv8m Training Metrics")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("runs/detect/train_yolov8m/learning_curve.png")
+    plt.show()
+else:
+    print(f"Results file not found: {results_csv}")
+
 # Путь к лучшим весам после обучения:
 best_local = "runs/detect/train_yolov8m/weights/best.pt"
 if not os.path.exists(best_local):
@@ -127,7 +149,6 @@ pred = infer_model.predict(
 print("Инференс завершён. Результаты в runs/detect/predict_yolov8m/")
 
 # ===================== 7) ВИЗУАЛИЗАЦИЯ РЕЗУЛЬТАТА В НОУТБУКЕ =====================
-import matplotlib.pyplot as plt
 import cv2
 
 # Ultralytics сохраняет отрисованное изображение в директорию предсказаний;
