@@ -267,7 +267,7 @@ def train_model(model: Seq2Seq, dataloader: DataLoader, optimizer: torch.optim.O
         print(f"Epoch {epoch + 1}: loss={avg_loss:.4f}")
     return history
 
-
+"""
 def translate_sentence(
     model: Seq2Seq,
     sentence: List[int],
@@ -293,8 +293,62 @@ def translate_sentence(
                 break
         attn_tensor = torch.cat(attentions, dim=0) if attentions else torch.zeros(0)
     return outputs, attn_tensor
+"""
+
+def translate_sentence(
+    model: Seq2Seq,
+    sentence: List[int],
+    max_len: int,
+    device: torch.device,
+    sos_idx: int,
+    eos_idx: int,
+) -> Tuple[List[int], torch.Tensor]:
+    model.eval()
+    with torch.no_grad():
+        src_tensor = torch.tensor(sentence, dtype=torch.long, device=device).unsqueeze(1)
+        encoder_outputs, hidden = model.encoder(src_tensor)
+        input_token = torch.tensor([sos_idx], device=device)
+        outputs = [input_token.item()]
+        attentions = []
+        for _ in range(max_len):
+            logits, hidden, attn_weights = model.decoder(input_token, hidden, encoder_outputs)
+            top1 = logits.argmax(1)
+            outputs.append(top1.item())
+            attentions.append(attn_weights.cpu())
+            input_token = top1
+            if top1.item() == eos_idx:
+                break
+
+        # `attn_weights` comes in as [batch, src_len]; squeeze batch dim to keep
+        # a true 2D attention map for visualization.
+        attn_tensor = torch.cat(attentions, dim=0).squeeze(1) if attentions else torch.zeros(0)
+    return outputs, attn_tensor
+
+def _prepare_attention(attention: torch.Tensor) -> torch.Tensor:
+    """Ensure attention has shape [tgt_len, src_len] on CPU for plotting."""
+
+    if attention.ndim == 3:
+        # Assume [tgt_len, batch, src_len]; take first batch for visualization.
+        attention = attention[:, 0, :]
+    attention = attention.squeeze()
+    return attention.detach().cpu() if attention.ndim == 2 else torch.zeros(0)
 
 
+def _truncate_tokens_for_attention(attention: torch.Tensor, src_tokens: List[str], tgt_tokens: List[str]) -> Tuple[List[str], List[str]]:
+    """Align token lists to the actual attention map extents."""
+
+    src_tokens = src_tokens[: attention.shape[1]] if attention.ndim == 2 else src_tokens
+    tgt_tokens = tgt_tokens[: attention.shape[0]] if attention.ndim == 2 else tgt_tokens
+    return src_tokens, tgt_tokens
+
+def _truncate_tokens_for_attention(attention: torch.Tensor, src_tokens: List[str], tgt_tokens: List[str]) -> Tuple[List[str], List[str]]:
+    """Align token lists to the actual attention map extents."""
+
+    src_tokens = src_tokens[: attention.shape[1]] if attention.ndim == 2 else src_tokens
+    tgt_tokens = tgt_tokens[: attention.shape[0]] if attention.ndim == 2 else tgt_tokens
+    return src_tokens, tgt_tokens
+
+"""
 def visualize_attention(attention: torch.Tensor, src_tokens: List[str], tgt_tokens: List[str], save_path: str) -> None:
     if attention.ndim != 2:
         return
@@ -313,6 +367,83 @@ def visualize_attention(attention: torch.Tensor, src_tokens: List[str], tgt_toke
     plt.savefig(save_path)
     plt.close()
 
+"""
+
+def visualize_attention(attention: torch.Tensor, src_tokens: List[str], tgt_tokens: List[str], save_path: str) -> None:
+    attention = _prepare_attention(attention)
+    if attention.ndim != 2 or attention.numel() == 0:
+        print(f"Skipping attention visualization; attention shape is {tuple(attention.shape)}")
+        return
+
+    src_tokens, tgt_tokens = _truncate_tokens_for_attention(attention, src_tokens, tgt_tokens)
+
+    plt.figure(figsize=(8, 6))
+    try:
+        import seaborn as sns  # type: ignore
+
+        sns.heatmap(attention.numpy(), xticklabels=src_tokens, yticklabels=tgt_tokens, cmap="viridis")
+    except ModuleNotFoundError:
+        plt.imshow(attention.numpy(), aspect="auto", cmap="viridis")
+        plt.xticks(ticks=range(len(src_tokens)), labels=src_tokens, rotation=45, ha="right")
+        plt.yticks(ticks=range(len(tgt_tokens)), labels=tgt_tokens)
+    plt.xlabel("Source")
+    plt.ylabel("Target")
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()
+
+def summarize_model_parameters(model: nn.Module, save_path: str) -> None:
+    """Print and persist a simple layer-wise parameter table."""
+
+    headers = ["Layer", "Shape", "# Params", "Trainable"]
+    rows = []
+    for name, param in model.named_parameters():
+        rows.append(
+            [
+                name,
+                "×".join(map(str, param.shape)),
+                f"{param.numel():,}",
+                "yes" if param.requires_grad else "no",
+            ]
+        )
+
+    col_widths = [max(len(row[idx]) for row in rows + [headers]) for idx in range(len(headers))]
+
+    def format_row(row: List[str]) -> str:
+        return " | ".join(cell.ljust(col_widths[idx]) for idx, cell in enumerate(row))
+
+    table_lines = [format_row(headers), "-+-".join("-" * w for w in col_widths)]
+    table_lines.extend(format_row(row) for row in rows)
+
+    table_text = "\n".join(table_lines)
+    print("\nModel parameters by layer:\n" + table_text + "\n")
+
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    with open(save_path, "w", encoding="utf-8") as f:
+        f.write(table_text)
+
+
+def visualize_translation_matrix(attention: torch.Tensor, src_tokens: List[str], tgt_tokens: List[str], save_path: str) -> None:
+    """Render attention as a translation matrix with labelled axes."""
+
+    attention = _prepare_attention(attention)
+    if attention.ndim != 2 or attention.numel() == 0:
+        print(f"Skipping translation matrix; attention shape is {tuple(attention.shape)}")
+        return
+
+    src_tokens, tgt_tokens = _truncate_tokens_for_attention(attention, src_tokens, tgt_tokens)
+
+    plt.figure(figsize=(8, 6))
+    plt.imshow(attention.numpy(), aspect="auto", cmap="magma")
+    plt.xticks(ticks=range(len(src_tokens)), labels=src_tokens, rotation=45, ha="right")
+    plt.yticks(ticks=range(len(tgt_tokens)), labels=tgt_tokens)
+    plt.xlabel("Source tokens")
+    plt.ylabel("Predicted tokens")
+    plt.title("Translation matrix (attention)")
+    plt.colorbar(label="Weight")
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()
 
 def main():
     torch.manual_seed(42)
@@ -329,6 +460,8 @@ def main():
     decoder = Decoder(len(rus_vocab), embed_size, hidden_size)
     model = Seq2Seq(encoder, decoder).to(device)
 
+    summarize_model_parameters(model, os.path.join("artifacts", "model_parameters.txt"))
+
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     criterion = nn.CrossEntropyLoss(ignore_index=0)
 
@@ -337,7 +470,7 @@ def main():
     if final_loss > 0.2:
         raise RuntimeError(f"Final loss {final_loss:.4f} is greater than 0.2")
 
-    sample_indices = [0, 1, 2, 3, 4]
+    sample_indices = [20, 111, 122, 132, 164]
     os.makedirs("artifacts", exist_ok=True)
     sos_idx = rus_vocab.get_index("<sos>")
     eos_idx = rus_vocab.get_index("<eos>")
@@ -358,8 +491,11 @@ def main():
         print("Target:", " ".join(tgt_tokens))
         print("Predicted:", " ".join(pred_tokens))
         print("-" * 80)
+       
         attn_path = os.path.join("artifacts", f"attention_{idx}.png")
         visualize_attention(attention, src_tokens, pred_tokens[1 : len(attention) + 1], attn_path)
+        translation_matrix_path = os.path.join("artifacts", f"translation_matrix_{idx}.png")
+        visualize_translation_matrix(attention, src_tokens, pred_tokens[1 : len(attention) + 1], translation_matrix_path)
 
     plt.figure(figsize=(8, 4))
     plt.plot(range(1, len(history) + 1), history, marker="o")
