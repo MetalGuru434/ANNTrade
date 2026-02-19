@@ -1,0 +1,14 @@
+# Generated output files
+mean_fr_report.png
+cosine_plot.png
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/

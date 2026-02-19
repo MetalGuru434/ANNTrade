@@ -4,4 +4,6 @@ matplotlib
 numpy
 pandas
 scikit-learn
+scipy
+statsmodels
 tensorflow
